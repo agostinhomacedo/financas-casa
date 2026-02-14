@@ -7,10 +7,9 @@ import os
 # --- CONFIGURAÇÃO ---
 st.set_page_config(page_title="Minha Casa Finanças", layout="centered", page_icon="💰")
 
-# Função para limpar os campos após salvar
-def limpar_campos():
-    st.session_state.desc_input = ""
-    st.session_state.valor_input = 0.0
+# Função para formatar moeda no padrão BR: 1.234,56
+def formatar_moeda(valor):
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def check_password():
     if "password" not in st.session_state:
@@ -33,7 +32,6 @@ if check_password():
     DB_FILE = "dados_financeiros.csv"
     COLunas = ["Data", "Descrição", "Valor", "Categoria", "Tipo"]
 
-    # Inicializa o arquivo se não existir
     if not os.path.exists(DB_FILE):
         df = pd.DataFrame(columns=COLunas)
         df.to_csv(DB_FILE, index=False)
@@ -46,28 +44,31 @@ if check_password():
     # --- ENTRADA DE DADOS ---
     with st.sidebar:
         st.header("➕ Novo Registro")
-        tipo = st.radio("Tipo de Transação", ["Saída (Gasto)", "Entrada (Ganho)"])
-        
-        # Usando session_state para permitir a limpeza automática
-        desc = st.text_input("Descrição", placeholder="Ex: Aluguel", key="desc_input")
-        valor_input = st.number_input("Valor", min_value=0.0, format="%.2f", step=1.0, key="valor_input")
-        
-        cat = st.selectbox("Categoria", ["Alimentação", "Moradia", "Lazer", "Salário", "Transporte", "Saúde", "Outros"])
-        data = st.date_input("Data", datetime.now())
-        
-        if st.button("💾 Salvar Registro"):
-            if desc == "" or valor_input == 0:
-                st.warning("Preencha a descrição e o valor!")
-            else:
-                valor_final = -valor_input if tipo == "Saída (Gasto)" else valor_input
-                novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, valor_final, cat, tipo]], columns=COLunas)
-                df = pd.concat([df, novo], ignore_index=True)
-                df.to_csv(DB_FILE, index=False)
-                
-                st.success("Salvo!")
-                # Chama a limpeza e recarrega a página
-                limpar_campos()
-                st.rerun()
+        with st.form("meu_formulario", clear_on_submit=True):
+            tipo = st.radio("Tipo", ["Saída (Gasto)", "Entrada (Ganho)"])
+            desc = st.text_input("Descrição", placeholder="Ex: Aluguel")
+            
+            # Campo de entrada (no padrão do sistema para cálculo)
+            valor_input = st.number_input("Valor", min_value=0.0, format="%.2f", step=1.0)
+            
+            cat = st.selectbox("Categoria", ["Alimentação", "Moradia", "Lazer", "Salário", "Transporte", "Saúde", "Outros"])
+            
+            # Formato de data configurado para o padrão brasileiro
+            data = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
+            
+            enviado = st.form_submit_button("💾 Salvar Registro")
+            
+            if enviado:
+                if desc == "" or valor_input == 0:
+                    st.warning("Preencha a descrição e o valor!")
+                else:
+                    valor_final = -valor_input if tipo == "Saída (Gasto)" else valor_input
+                    # Salvando a data no formato dd/mm/yyyy
+                    novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, valor_final, cat, tipo]], columns=COLunas)
+                    df = pd.concat([df, novo], ignore_index=True)
+                    df.to_csv(DB_FILE, index=False)
+                    st.success("Salvo!")
+                    st.rerun()
 
     # --- PAINEL VISUAL ---
     if not df.empty:
@@ -75,10 +76,11 @@ if check_password():
         gastos = df[df["Valor"] < 0]["Valor"].sum()
         saldo = ganhos + gastos
 
+        # Métricas com formatação brasileira
         c1, c2, c3 = st.columns(3)
-        c1.metric("Entradas", f"R$ {ganhos:.2f}")
-        c2.metric("Saídas", f"R$ {abs(gastos):.2f}", delta_color="inverse")
-        c3.metric("Saldo Atual", f"R$ {saldo:.2f}")
+        c1.metric("Entradas", formatar_moeda(ganhos))
+        c2.metric("Saídas", formatar_moeda(abs(gastos)), delta_color="inverse")
+        c3.metric("Saldo Atual", formatar_moeda(saldo))
 
         df_gastos = df[df["Valor"] < 0].copy()
         if not df_gastos.empty:
@@ -90,13 +92,15 @@ if check_password():
         st.divider()
         st.subheader("📄 Histórico e Exclusão")
         
-        # Exibição inversa para ver os últimos primeiro
+        # Histórico formatado
         for i, row in df.iloc[::-1].iterrows():
             col_data, col_desc, col_val, col_btn = st.columns([2, 3, 2, 1])
             cor = "red" if row['Valor'] < 0 else "green"
-            col_data.write(row['Data'])
+            
+            col_data.write(row['Data']) # Já está como dd/mm/yyyy
             col_desc.write(row['Descrição'])
-            col_val.write(f":{cor}[R$ {row['Valor']:.2f}]")
+            col_val.write(f":{cor}[{formatar_moeda(row['Valor'])}]")
+            
             if col_btn.button("🗑️", key=f"del_{i}"):
                 df = df.drop(i)
                 df.to_csv(DB_FILE, index=False)
