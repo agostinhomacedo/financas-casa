@@ -46,9 +46,16 @@ if check_password():
         st.header("➕ Novo Registro")
         with st.form("meu_formulario", clear_on_submit=True):
             tipo = st.radio("Tipo", ["Saída (Gasto)", "Entrada (Ganho)"])
-            desc = st.text_input("Descrição", placeholder="Ex: Aluguel")
+            desc = st.text_input("Descrição", placeholder="Ex: Fatura Nubank")
             valor_input = st.number_input("Valor", min_value=0.0, format="%.2f", step=1.0)
-            cat = st.selectbox("Categoria", ["Alimentação", "Moradia", "Lazer", "Salário", "Transporte", "Saúde", "Outros"])
+            
+            # --- LISTA DE CATEGORIAS ATUALIZADA ---
+            categorias = sorted([
+                "Alimentação", "Cartão de Crédito", "Lazer", 
+                "Moradia", "Salário", "Saúde", "Transporte", "Outros"
+            ])
+            cat = st.selectbox("Categoria", categorias)
+            
             data = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
             
             enviado = st.form_submit_button("💾 Salvar Registro")
@@ -70,7 +77,6 @@ if check_password():
         gastos = abs(df[df["Valor"] < 0]["Valor"].sum())
         saldo = ganhos - gastos
 
-        # Métricas em destaque
         m1, m2, m3 = st.columns(3)
         m1.metric("Total de Entradas", formatar_moeda(ganhos))
         m2.metric("Total de Saídas", formatar_moeda(gastos), delta_color="inverse")
@@ -78,12 +84,10 @@ if check_password():
 
         st.divider()
 
-        # --- SEÇÃO DE GRÁFICOS ---
         col_graf1, col_graf2 = st.columns(2)
 
         with col_graf1:
             st.subheader("📊 Entradas vs Saídas")
-            # Criando dados para o gráfico comparativo
             df_comp = pd.DataFrame({
                 "Tipo": ["Entradas", "Saídas"],
                 "Valor": [ganhos, gastos]
@@ -103,17 +107,14 @@ if check_password():
             else:
                 st.info("Sem gastos para exibir a pizza.")
 
-        # Novo gráfico: Total acumulado por despesa (Barras Horizontais)
         st.subheader("📉 Ranking de Despesas por Categoria")
         if not df_gastos.empty:
-            # Agrupar por categoria e somar
             resumo_cat = df_gastos.groupby("Categoria")["Valor_Abs"].sum().reset_index().sort_values(by="Valor_Abs", ascending=True)
             fig_barras = px.bar(resumo_cat, y="Categoria", x="Valor_Abs", orientation='h',
                                labels={'Valor_Abs': 'Valor Total (R$)'},
                                color="Valor_Abs", color_continuous_scale="Reds")
             st.plotly_chart(fig_barras, use_container_width=True)
 
-        # --- HISTÓRICO ---
         st.divider()
         with st.expander("📄 Ver Histórico de Lançamentos e Excluir"):
             for i, row in df.iloc[::-1].iterrows():
