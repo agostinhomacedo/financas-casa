@@ -4,7 +4,7 @@ import plotly.express as px
 from datetime import datetime
 import os
 
-# --- CONFIGURAÇÃO E SEGURANÇA ---
+# --- CONFIGURAÇÃO ---
 st.set_page_config(page_title="Minha Casa Finanças", layout="centered", page_icon="💰")
 
 def check_password():
@@ -14,7 +14,7 @@ def check_password():
         st.title("🔐 Acesso Restrito")
         senha = st.text_input("Digite a senha da casa:", type="password")
         if st.button("Entrar"):
-            if senha == "2804": # <--- COLOQUE SUA SENHA AQUI
+            if senha == "1234": # <--- SUA SENHA
                 st.session_state.password = True
                 st.rerun()
             else:
@@ -27,7 +27,7 @@ if check_password():
 
     DB_FILE = "dados_financeiros.csv"
     if not os.path.exists(DB_FILE):
-        df = pd.DataFrame(columns=["Data", "Descrição", "Valor", "Categoria"])
+        df = pd.DataFrame(columns=["Data", "Descrição", "Valor", "Categoria", "Tipo"])
         df.to_csv(DB_FILE, index=False)
     else:
         df = pd.read_csv(DB_FILE)
@@ -35,50 +35,57 @@ if check_password():
     # --- ENTRADA DE DADOS ---
     with st.sidebar:
         st.header("➕ Novo Registro")
-        desc = st.text_input("O que comprou?")
-        valor = st.number_input("Valor (Use - para gastos)", format="%.2f", step=1.0)
+        tipo = st.radio("Tipo de Transação", ["Saída (Gasto)", "Entrada (Ganho)"])
+        desc = st.text_input("Descrição", placeholder="Ex: Aluguel")
+        valor_input = st.number_input("Valor", min_value=0.0, format="%.2f", step=1.0)
         cat = st.selectbox("Categoria", ["Alimentação", "Moradia", "Lazer", "Salário", "Transporte", "Saúde", "Outros"])
         data = st.date_input("Data", datetime.now())
         
-        if st.button("💾 Salvar no Sistema"):
-            novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, valor, cat]], columns=df.columns)
+        if st.button("💾 Salvar Registro"):
+            # Se for Saída, o valor fica negativo automaticamente
+            valor_final = -valor_input if tipo == "Saída (Gasto)" else valor_input
+            
+            novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, valor_final, cat, tipo]], columns=df.columns)
             df = pd.concat([df, novo], ignore_index=True)
             df.to_csv(DB_FILE, index=False)
-            st.success("Salvo!")
+            st.success("Salvo com sucesso!")
             st.rerun()
 
-    # --- PAINEL VISUAL (DASHBOARD) ---
+    # --- PAINEL VISUAL ---
     if not df.empty:
-        # Cálculos Rápidos
         ganhos = df[df["Valor"] > 0]["Valor"].sum()
         gastos = df[df["Valor"] < 0]["Valor"].sum()
         saldo = ganhos + gastos
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Entradas", f"R$ {ganhos:.2f}")
-        col2.metric("Saídas", f"R$ {abs(gastos):.2f}", delta_color="inverse")
-        col3.metric("Saldo Atual", f"R$ {saldo:.2f}")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Entradas", f"R$ {ganhos:.2f}")
+        c2.metric("Saídas", f"R$ {abs(gastos):.2f}", delta_color="inverse")
+        c3.metric("Saldo Atual", f"R$ {saldo:.2f}")
 
-        st.divider()
-
-        # Gráfico de Pizza (Apenas Despesas)
-        st.subheader("🍕 Onde está o dinheiro?")
+        # Gráfico de Pizza
         df_gastos = df[df["Valor"] < 0].copy()
-        df_gastos["Valor"] = df_gastos["Valor"].abs() # Gráfico precisa de valores positivos
-        
         if not df_gastos.empty:
-            fig = px.pie(df_gastos, values='Valor', names='Categoria', hole=0.4,
-                         color_discrete_sequence=px.colors.qualitative.Pastel)
+            st.subheader("🍕 Divisão de Gastos")
+            df_gastos["Valor_Abs"] = df_gastos["Valor"].abs()
+            fig = px.pie(df_gastos, values='Valor_Abs', names='Categoria', hole=0.4)
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Ainda não há gastos registrados para gerar o gráfico.")
 
-        # Tabela de Histórico
-        with st.expander("📄 Ver Histórico Completo"):
-            st.dataframe(df.sort_index(ascending=False), use_container_width=True)
+        # --- GERENCIAR LANÇAMENTOS ---
+        st.divider()
+        st.subheader("📄 Histórico e Exclusão")
+        
+        # Exibe a tabela com um índice para exclusão
+        for i, row in df.iloc[::-1].iterrows(): # Mostra do mais novo para o mais antigo
+            col_data, col_desc, col_val, col_btn = st.columns([2, 3, 2, 1])
+            cor = "red" if row['Valor'] < 0 else "green"
             
-            if st.button("🗑️ Apagar tudo e recomeçar"):
-                os.remove(DB_FILE)
+            col_data.write(row['Data'])
+            col_desc.write(row['Descrição'])
+            col_val.write(f":{cor}[R$ {row['Valor']:.2f}]")
+            
+            if col_btn.button("🗑️", key=f"del_{i}"):
+                df = df.drop(i)
+                df.to_csv(DB_FILE, index=False)
                 st.rerun()
     else:
-        st.info("Bem-vindo! Use o menu lateral para fazer seu primeiro registro.")
+        st.info("Ainda não há registros. Use o menu lateral!")
