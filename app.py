@@ -18,29 +18,56 @@ def formatar_moeda(valor):
 
 def extrair_dados_inteligente(imagem):
     try:
-        # Converter imagem para OpenCV
+        # 1. Preparação da Imagem (Transforma em "Scanner")
         img = np.array(imagem.convert('RGB'))
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         
-        # Pré-processamento para melhorar OCR
-        gray = cv2.threshold(cv2.medianBlur(gray, 3), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+        # Aumenta o contraste e limpa o ruído
+        # O filtro CLAHE ajuda a equilibrar a luz se a foto tiver sombras
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        gray = clahe.apply(gray)
         
-        # OCR focado em português
+        # Binarização (Preto no Branco puro)
+        gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+        
+        # 2. Leitura do Texto
         texto = pytesseract.image_to_string(gray, lang='por')
         
-        # 1. Busca por Valor (Maior valor decimal encontrado na nota)
-        todos_valores = re.findall(r'(\d+[\.,]\d{2})', texto)
+        # --- LOGICA DE BUSCA DE VALOR MELHORADA ---
+        # Procuramos por qualquer número no formato 00,00 ou 00.00
+        todos_numeros = re.findall(r'(\d+[\.,]\d{2})', texto)
+        
         valor_final = 0.0
-        if todos_valores:
-            lista_floats = [float(v.replace('.', '').replace(',', '.')) for v in todos_valores]
-            valor_final = max(lista_floats)
+        if todos_numeros:
+            # Converte todos para float
+            lista_floats = []
+            for v in todos_numeros:
+                try:
+                    # Limpa pontos de milhar e converte vírgula em ponto
+                    limpo = v.replace('.', '').replace(',', '.')
+                    lista_floats.append(float(limpo))
+                except:
+                    continue
+            
+            if lista_floats:
+                # ESTRATÉGIA: Geralmente o TOTAL é o maior valor da nota fiscal.
+                # Mas filtramos valores absurdos (ex: datas que pareçam valores)
+                lista_filtrada = [n for n in lista_floats if n < 50000] # Limite de segurança
+                if lista_filtrada:
+                    valor_final = max(lista_filtrada)
 
-        # 2. Busca por Descrição (Pega a primeira linha legível)
-        linhas = [l.strip() for l in texto.split('\n') if len(l.strip()) > 3]
-        desc_sugerida = linhas[0][:30] if linhas else ""
+        # 3. Busca de Descrição (Nome do estabelecimento)
+        # Pegamos a primeira linha que contenha letras (evitando lixo do topo)
+        linhas = [l.strip() for l in texto.split('\n') if len(l.strip()) > 5]
+        desc_sugerida = ""
+        for linha in linhas:
+            if any(c.isalpha() for c in linha): # Se tem letras, é provável que seja o nome
+                desc_sugerida = linha[:30]
+                break
 
         return desc_sugerida, valor_final
-    except:
+    except Exception as e:
+        print(f"Erro no OCR: {e}")
         return "", 0.0
 
 def check_password():
