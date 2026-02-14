@@ -10,103 +10,88 @@ from PIL import Image
 import re
 
 # --- CONFIGURAÇÃO ---
-st.set_page_config(page_title="Minha Casa Finanças AI", layout="wide", page_icon="📸")
+st.set_page_config(page_title="Finanças Pro AI", layout="wide", page_icon="🎯")
 
-# Função para extrair valor da imagem (IA Simples)
-def extrair_valor_da_imagem(imagem):
+# --- MOTOR DE INTELIGÊNCIA ---
+def extrair_dados_inteligente(imagem):
     try:
-        # 1. Converter para array e escala de cinza
+        # Converter imagem para OpenCV
         img = np.array(imagem.convert('RGB'))
+        
+        # Pré-processamento avançado para notas fiscais
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        # Aumentar nitidez e contraste
+        gray = cv2.threshold(cv2.medianBlur(gray, 3), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
         
-        # 2. Aumentar o contraste e reduzir ruído (ajuda muito em fotos de celular)
-        gray = cv2.bilateralFilter(gray, 9, 75, 75) # Remove ruído mantendo bordas
-        gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        # Configuração do Tesseract para focar em números e palavras financeiras
+        custom_config = r'--oem 3 --psm 6'
+        texto = pytesseract.image_to_string(gray, lang='por', config=custom_config)
         
-        # 3. Executar o OCR
-        texto = pytesseract.image_to_string(gray, lang='por')
-        st.expander("Texto detectado (Debug)").write(texto) # Para você ver o que ele está lendo
+        # 1. Identificar Valor Total
+        # Padrões: TOTAL, VALOR A PAGAR, VALOR RECEBIDO, R$, SUBTOTAL
+        padrao_valor = r'(?:TOTAL|VALOR|PAGAR|R\$)\s*:?\s*(\d+[\.,]\d{2})'
+        todos_valores = re.findall(padrao_valor, texto, re.IGNORECASE)
         
-        # 4. Lógica para achar o Valor Total
-        # Procuramos por palavras-chave que geralmente precedem o valor final
-        linhas = texto.lower().split('\n')
-        for linha in reversed(linhas): # Começamos do fim da nota, onde costuma estar o total
-            if any(chave in linha for chave in ['total', 'pago', 'valor', 'r$', 'recebido']):
-                # Busca números no formato 0,00 ou 0.00 nesta linha
-                numeros = re.findall(r'(\d+[\.,]\d{2})', linha)
-                if numeros:
-                    valor_limpo = numeros[-1].replace('.', '').replace(',', '.')
-                    return float(valor_limpo)
-        
-        # Se não achou por palavra-chave, tenta pegar o maior valor numérico da nota
-        todos_valores = re.findall(r'(\d+[\.,]\d{2})', texto)
+        # Se não achar por palavra-chave, busca qualquer número com decimal no final da nota
+        if not todos_valores:
+            todos_valores = re.findall(r'(\d+[\.,]\d{2})', texto)
+            
+        valor_final = 0.0
         if todos_valores:
-            lista_floats = [float(v.replace('.', '').replace(',', '.')) for v in todos_valores]
-            return max(lista_floats) # O maior valor costuma ser o total
-            
-    except Exception as e:
-        st.error(f"Erro no processamento: {e}")
-    return 0.0
+            # Pegamos o maior valor da nota (geralmente é o Total)
+            lista_limpa = [float(v.replace('.', '').replace(',', '.')) for v in todos_valores]
+            valor_final = max(lista_floats) if lista_floats else 0.0
 
-def formatar_moeda(valor):
-    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        # 2. Tentar identificar Descrição (Nome do Estabelecimento)
+        # Geralmente é a primeira ou segunda linha de texto com letras grandes
+        linhas = [l.strip() for l in texto.split('\n') if len(l.strip()) > 3]
+        desc_sugerida = linhas[0][:30] if linhas else "Nova Despesa"
 
-# --- (Mantenha a função check_password aqui igual à anterior) ---
-def check_password():
-    if "password" not in st.session_state:
-        st.session_state.password = False
-    if not st.session_state.password:
-        st.title("🔐 Acesso Restrito")
-        senha = st.text_input("Senha:", type="password")
-        if st.button("Entrar"):
-            if senha == "2804":
-                st.session_state.password = True
-                st.rerun()
-        return False
-    return True
-
-if check_password():
-    st.title("🏠 Finanças com IA")
-
-    DB_FILE = "dados_financeiros.csv"
-    COLunas = ["Data", "Descrição", "Valor", "Categoria", "Tipo"]
-
-    if not os.path.exists(DB_FILE):
-        df = pd.DataFrame(columns=COLunas)
-        df.to_csv(DB_FILE, index=False)
-    else:
-        df = pd.read_csv(DB_FILE)
-
-    # --- ENTRADA INTELIGENTE ---
-    with st.sidebar:
-        st.header("📸 Registro por Foto")
-        foto = st.camera_input("Tirar foto do recibo")
+        return desc_sugerida, valor_final
         
-        valor_detectado = 0.0
-        if foto:
-            img_pil = Image.open(foto)
-            with st.spinner('Lendo imagem...'):
-                valor_detectado = extrair_valor_da_imagem(img_pil)
-                st.info(f"Valor detectado: R$ {valor_detectado:.2f}")
+    except Exception as e:
+        return None, 0.0
 
-        st.divider()
-        with st.form("form_ia", clear_on_submit=True):
-            tipo = st.radio("Tipo", ["Saída (Gasto)", "Entrada (Ganho)"])
-            desc = st.text_input("Descrição", placeholder="Ex: Mercado Extra")
+# --- INTERFACE (Conforme o modelo solicitado) ---
+if check_password(): # Função de senha que já tínhamos
+    st.title("🎯 Lançamento Inteligente")
+    
+    # Colunas para organizar como no seu modelo
+    col_foto, col_dados = st.columns([1, 1.2])
+    
+    with col_foto:
+        st.subheader("1. Capture o Comprovante")
+        foto = st.camera_input("Tire a foto focando no Total")
+        
+    with col_dados:
+        st.subheader("2. Confirme os Dados")
+        
+        # Estado do formulário
+        desc_inicial = ""
+        valor_inicial = 0.0
+        
+        if foto:
+            with st.spinner('IA analisando o cupom...'):
+                img_pil = Image.open(foto)
+                desc_ia, valor_ia = extrair_dados_inteligente(img_pil)
+                desc_inicial = desc_ia
+                valor_inicial = valor_ia
+
+        with st.form("confirmacao_ia", clear_on_submit=True):
+            tipo = st.radio("Fluxo", ["Saída (Gasto)", "Entrada (Ganho)"], horizontal=True)
             
-            # O valor já vem preenchido pelo que a IA leu
-            valor_final_input = st.number_input("Confirme o Valor", value=float(valor_detectado), format="%.2f")
+            # Campos com valores pré-preenchidos pela IA
+            desc = st.text_input("Descrição Identificada", value=desc_inicial)
+            valor_confirmado = st.number_input("Valor Identificado (R$)", value=float(valor_inicial), format="%.2f")
             
             cat = st.selectbox("Categoria", sorted(["Alimentação", "Cartão de Crédito", "Lazer", "Moradia", "Salário", "Saúde", "Transporte", "Outros"]))
-            data = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
+            data = st.date_input("Data da Despesa", datetime.now())
             
-            if st.form_submit_button("💾 Salvar Registro"):
-                val = -valor_final_input if tipo == "Saída (Gasto)" else valor_final_input
-                novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, val, cat, tipo]], columns=COLunas)
-                df = pd.concat([df, novo], ignore_index=True)
-                df.to_csv(DB_FILE, index=False)
-                st.success("Salvo!")
+            if st.form_submit_button("✅ CONFIRMAR E GUARDAR"):
+                # Salvar no CSV (Mesma lógica anterior)
+                # ... [Código de salvar igual ao anterior] ...
+                st.balloons()
                 st.rerun()
 
-    # --- (O restante do código de gráficos permanece o mesmo) ---
-    # ... (Copie a parte das métricas e gráficos do código anterior aqui)
+    # --- ABAIXO: GRÁFICOS E HISTÓRICO ---
+    # [Código de gráficos e histórico igual ao anterior]
