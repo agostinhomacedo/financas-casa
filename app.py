@@ -9,89 +9,145 @@ import pytesseract
 from PIL import Image
 import re
 
-# --- CONFIGURAÇÃO ---
+# --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Finanças Pro AI", layout="wide", page_icon="🎯")
 
-# --- MOTOR DE INTELIGÊNCIA ---
+# --- FUNÇÕES DE SUPORTE ---
+def formatar_moeda(valor):
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 def extrair_dados_inteligente(imagem):
     try:
         # Converter imagem para OpenCV
         img = np.array(imagem.convert('RGB'))
-        
-        # Pré-processamento avançado para notas fiscais
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        # Aumentar nitidez e contraste
+        
+        # Pré-processamento para melhorar OCR
         gray = cv2.threshold(cv2.medianBlur(gray, 3), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
         
-        # Configuração do Tesseract para focar em números e palavras financeiras
-        custom_config = r'--oem 3 --psm 6'
-        texto = pytesseract.image_to_string(gray, lang='por', config=custom_config)
+        # OCR focado em português
+        texto = pytesseract.image_to_string(gray, lang='por')
         
-        # 1. Identificar Valor Total
-        # Padrões: TOTAL, VALOR A PAGAR, VALOR RECEBIDO, R$, SUBTOTAL
-        padrao_valor = r'(?:TOTAL|VALOR|PAGAR|R\$)\s*:?\s*(\d+[\.,]\d{2})'
-        todos_valores = re.findall(padrao_valor, texto, re.IGNORECASE)
-        
-        # Se não achar por palavra-chave, busca qualquer número com decimal no final da nota
-        if not todos_valores:
-            todos_valores = re.findall(r'(\d+[\.,]\d{2})', texto)
-            
+        # 1. Busca por Valor (Maior valor decimal encontrado na nota)
+        todos_valores = re.findall(r'(\d+[\.,]\d{2})', texto)
         valor_final = 0.0
         if todos_valores:
-            # Pegamos o maior valor da nota (geralmente é o Total)
-            lista_limpa = [float(v.replace('.', '').replace(',', '.')) for v in todos_valores]
-            valor_final = max(lista_floats) if lista_floats else 0.0
+            lista_floats = [float(v.replace('.', '').replace(',', '.')) for v in todos_valores]
+            valor_final = max(lista_floats)
 
-        # 2. Tentar identificar Descrição (Nome do Estabelecimento)
-        # Geralmente é a primeira ou segunda linha de texto com letras grandes
+        # 2. Busca por Descrição (Pega a primeira linha legível)
         linhas = [l.strip() for l in texto.split('\n') if len(l.strip()) > 3]
-        desc_sugerida = linhas[0][:30] if linhas else "Nova Despesa"
+        desc_sugerida = linhas[0][:30] if linhas else ""
 
         return desc_sugerida, valor_final
-        
-    except Exception as e:
-        return None, 0.0
+    except:
+        return "", 0.0
 
-# --- INTERFACE (Conforme o modelo solicitado) ---
-if check_password(): # Função de senha que já tínhamos
-    st.title("🎯 Lançamento Inteligente")
+def check_password():
+    if "password" not in st.session_state:
+        st.session_state.password = False
+    if not st.session_state.password:
+        st.title("🔐 Acesso Restrito")
+        senha = st.text_input("Digite a senha da casa:", type="password")
+        if st.button("Entrar"):
+            if senha == "2804": # <--- SUA SENHA AQUI
+                st.session_state.password = True
+                st.rerun()
+            else:
+                st.error("Senha incorreta!")
+        return False
+    return True
+
+# --- EXECUÇÃO DO APP ---
+if check_password():
+    DB_FILE = "dados_financeiros.csv"
+    COLunas = ["Data", "Descrição", "Valor", "Categoria", "Tipo"]
+
+    if not os.path.exists(DB_FILE):
+        df = pd.DataFrame(columns=COLunas)
+        df.to_csv(DB_FILE, index=False)
+    else:
+        df = pd.read_csv(DB_FILE)
+        if len(df.columns) != len(COLunas):
+            df = pd.DataFrame(columns=COLunas)
+            df.to_csv(DB_FILE, index=False)
+
+    st.title("🎯 Lançamento com Inteligência Artificial")
     
-    # Colunas para organizar como no seu modelo
+    # Interface Lado a Lado (Conforme seu modelo)
     col_foto, col_dados = st.columns([1, 1.2])
     
     with col_foto:
-        st.subheader("1. Capture o Comprovante")
-        foto = st.camera_input("Tire a foto focando no Total")
+        st.subheader("1. Foto do Comprovante")
+        foto = st.camera_input("Foque no valor total da nota")
         
     with col_dados:
-        st.subheader("2. Confirme os Dados")
+        st.subheader("2. Confirmação de Dados")
         
-        # Estado do formulário
-        desc_inicial = ""
-        valor_inicial = 0.0
+        # Lógica de processamento da IA
+        desc_ia = ""
+        valor_ia = 0.0
         
         if foto:
-            with st.spinner('IA analisando o cupom...'):
+            with st.spinner('IA analisando nota...'):
                 img_pil = Image.open(foto)
                 desc_ia, valor_ia = extrair_dados_inteligente(img_pil)
-                desc_inicial = desc_ia
-                valor_inicial = valor_ia
 
-        with st.form("confirmacao_ia", clear_on_submit=True):
-            tipo = st.radio("Fluxo", ["Saída (Gasto)", "Entrada (Ganho)"], horizontal=True)
+        with st.form("form_ia", clear_on_submit=True):
+            tipo = st.radio("Tipo de Fluxo", ["Saída (Gasto)", "Entrada (Ganho)"], horizontal=True)
             
-            # Campos com valores pré-preenchidos pela IA
-            desc = st.text_input("Descrição Identificada", value=desc_inicial)
-            valor_confirmado = st.number_input("Valor Identificado (R$)", value=float(valor_inicial), format="%.2f")
+            # Campos preenchidos automaticamente pela IA
+            desc = st.text_input("Descrição (IA)", value=desc_ia)
+            valor_confirmado = st.number_input("Valor Identificado (R$)", value=float(valor_ia), format="%.2f")
             
             cat = st.selectbox("Categoria", sorted(["Alimentação", "Cartão de Crédito", "Lazer", "Moradia", "Salário", "Saúde", "Transporte", "Outros"]))
-            data = st.date_input("Data da Despesa", datetime.now())
+            data = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
             
-            if st.form_submit_button("✅ CONFIRMAR E GUARDAR"):
-                # Salvar no CSV (Mesma lógica anterior)
-                # ... [Código de salvar igual ao anterior] ...
-                st.balloons()
-                st.rerun()
+            if st.form_submit_button("✅ CONFIRMAR E SALVAR"):
+                if desc == "" or valor_confirmado == 0:
+                    st.warning("Por favor, verifique a descrição e o valor.")
+                else:
+                    valor_final = -valor_confirmado if tipo == "Saída (Gasto)" else valor_confirmado
+                    novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, valor_final, cat, tipo]], columns=COLunas)
+                    df = pd.concat([df, novo], ignore_index=True)
+                    df.to_csv(DB_FILE, index=False)
+                    st.success("Registro salvo com sucesso!")
+                    st.rerun()
 
-    # --- ABAIXO: GRÁFICOS E HISTÓRICO ---
-    # [Código de gráficos e histórico igual ao anterior]
+    # --- DASHBOARD DE GRÁFICOS ---
+    if not df.empty:
+        st.divider()
+        ganhos = df[df["Valor"] > 0]["Valor"].sum()
+        gastos = abs(df[df["Valor"] < 0]["Valor"].sum())
+        
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Entradas", formatar_moeda(ganhos))
+        c2.metric("Saídas", formatar_moeda(gastos))
+        c3.metric("Saldo", formatar_moeda(ganhos - gastos))
+
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            st.subheader("📊 Comparativo")
+            fig_comp = px.bar(x=["Entradas", "Saídas"], y=[ganhos, gastos], color=["Entradas", "Saídas"],
+                             color_discrete_map={"Entradas": "#2ecc71", "Saídas": "#e74c3c"})
+            st.plotly_chart(fig_comp, use_container_width=True)
+        
+        with col_g2:
+            st.subheader("🍕 Gastos por Categoria")
+            df_gastos = df[df["Valor"] < 0].copy()
+            if not df_gastos.empty:
+                df_gastos["Valor_Abs"] = df_gastos["Valor"].abs()
+                fig_pizza = px.pie(df_gastos, values='Valor_Abs', names='Categoria', hole=0.4)
+                st.plotly_chart(fig_pizza, use_container_width=True)
+
+        # Histórico
+        with st.expander("📄 Ver Histórico / Excluir"):
+            for i, row in df.iloc[::-1].iterrows():
+                col_d, col_ds, col_v, col_b = st.columns([1, 2, 1, 0.5])
+                col_d.write(row['Data'])
+                col_ds.write(row['Descrição'])
+                col_v.write(formatar_moeda(row['Valor']))
+                if col_b.button("🗑️", key=f"del_{i}"):
+                    df = df.drop(i)
+                    df.to_csv(DB_FILE, index=False)
+                    st.rerun()
