@@ -14,17 +14,38 @@ st.set_page_config(page_title="Minha Casa Finanças AI", layout="wide", page_ico
 
 # Função para extrair valor da imagem (IA Simples)
 def extrair_valor_da_imagem(imagem):
-    # Converte para tons de cinza para facilitar leitura
-    img = np.array(imagem.convert('RGB'))
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    # Usa OCR para ler o texto
-    texto = pytesseract.image_to_string(gray, lang='por')
-    
-    # Busca por padrões de moeda (ex: 10,50 ou 10.50)
-    valores = re.findall(r'\d+(?:[.,]\d{2})', texto)
-    if valores:
-        # Pega o último valor encontrado (geralmente o total da nota)
-        return float(valores[-1].replace(',', '.'))
+    try:
+        # 1. Converter para array e escala de cinza
+        img = np.array(imagem.convert('RGB'))
+        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        
+        # 2. Aumentar o contraste e reduzir ruído (ajuda muito em fotos de celular)
+        gray = cv2.bilateralFilter(gray, 9, 75, 75) # Remove ruído mantendo bordas
+        gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        
+        # 3. Executar o OCR
+        texto = pytesseract.image_to_string(gray, lang='por')
+        st.expander("Texto detectado (Debug)").write(texto) # Para você ver o que ele está lendo
+        
+        # 4. Lógica para achar o Valor Total
+        # Procuramos por palavras-chave que geralmente precedem o valor final
+        linhas = texto.lower().split('\n')
+        for linha in reversed(linhas): # Começamos do fim da nota, onde costuma estar o total
+            if any(chave in linha for chave in ['total', 'pago', 'valor', 'r$', 'recebido']):
+                # Busca números no formato 0,00 ou 0.00 nesta linha
+                numeros = re.findall(r'(\d+[\.,]\d{2})', linha)
+                if numeros:
+                    valor_limpo = numeros[-1].replace('.', '').replace(',', '.')
+                    return float(valor_limpo)
+        
+        # Se não achou por palavra-chave, tenta pegar o maior valor numérico da nota
+        todos_valores = re.findall(r'(\d+[\.,]\d{2})', texto)
+        if todos_valores:
+            lista_floats = [float(v.replace('.', '').replace(',', '.')) for v in todos_valores]
+            return max(lista_floats) # O maior valor costuma ser o total
+            
+    except Exception as e:
+        st.error(f"Erro no processamento: {e}")
     return 0.0
 
 def formatar_moeda(valor):
