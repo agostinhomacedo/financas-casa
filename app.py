@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -12,109 +13,95 @@ import re
 # --- CONFIGURAÇÃO ---
 st.set_page_config(page_title="Finanças Pro AI", layout="wide", page_icon="🎯")
 
+# --- MOTOR DE IA ---
 def extrair_dados_alta_precisao(imagem_file):
     try:
-        # 1. Carregar e forçar alta resolução
         img = Image.open(imagem_file)
         img = np.array(img.convert('RGB'))
-        
-        # 2. PRÉ-PROCESSAMENTO "SCANNER" (O segredo da precisão)
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        # Filtro de nitidez
+        gray = cv2.threshold(cv2.medianBlur(gray, 3), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+        texto = pytesseract.image_to_string(gray, lang='por')
         
-        # Aumentar a escala da imagem (ajuda a ler letras pequenas de cupons)
-        gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+        valores = re.findall(r'(\d+[\.,]\d{2})', texto)
+        v_final = 0.0
+        if valores:
+            v_final = max([float(v.replace('.', '').replace(',', '.')) for v in valores if float(v.replace('.', '').replace(',', '.')) < 10000])
         
-        # Filtro para remover sombras e brilhos do papel térmico
-        gray = cv2.bilateralFilter(gray, 9, 75, 75)
-        gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-        
-        # 3. OCR com configuração de "Bloco de Texto"
-        # --psm 6 assume que a nota é um bloco único, --oem 3 é o motor mais forte
-        custom_config = r'--oem 3 --psm 6'
-        texto = pytesseract.image_to_string(gray, lang='por', config=custom_config)
-        
-        # DEBUG: Caso queira ver o que a IA está lendo, descomente a linha abaixo
-        # st.expander("Ver o que a IA leu").code(texto)
-
-        # 4. BUSCA INTELIGENTE DE VALORES
-        # Procuramos por números com vírgula ou ponto (padrão BR)
-        padrao_valor = r'(\d+[\.,]\d{2})'
-        todos_valores = re.findall(padrao_valor, texto)
-        
-        if not todos_valores:
-            return "Não identificado", 0.0
-
-        # Converte para float e limpa
-        lista_floats = []
-        for v in todos_valores:
-            limpo = v.replace('.', '').replace(',', '.')
-            try:
-                lista_floats.append(float(limpo))
-            except: continue
-
-        # O Valor Total costuma ser o MAIOR valor próximo a palavras-chave
-        # Mas se não houver palavras-chave, pegamos o maior valor absoluto abaixo de 10.000
-        valor_final = max([n for n in lista_floats if n < 10000]) if lista_floats else 0.0
-        
-        # Tenta pegar a primeira linha para o nome
         linhas = [l.strip() for l in texto.split('\n') if len(l.strip()) > 3]
-        desc_final = linhas[0][:25] if linhas else "Despesa"
-
-        return desc_final, valor_final
+        d_final = linhas[0][:25] if linhas else "Despesa"
+        return d_final, v_final
     except:
-        return "Erro na leitura", 0.0
+        return "", 0.0
 
-# --- INTERFACE ---
-# (Certifique-se de manter a função check_password no seu arquivo!)
+# --- SEGURANÇA ---
+def check_password():
+    if "password" not in st.session_state:
+        st.session_state.password = False
+    if not st.session_state.password:
+        st.title("🔐 Acesso Restrito")
+        senha = st.text_input("Senha da Casa:", type="password")
+        if st.button("Entrar"):
+            if senha == "1234":
+                st.session_state.password = True
+                st.rerun()
+            else:
+                st.error("Senha incorreta")
+        return False
+    return True
 
-if "password" in st.session_state and st.session_state.password:
+# --- APP PRINCIPAL ---
+if check_password():
     DB_FILE = "dados_financeiros.csv"
     COLunas = ["Data", "Descrição", "Valor", "Categoria", "Tipo"]
 
-    # Iniciar estado se não existir
-    if "valor_ia" not in st.session_state: st.session_state.valor_ia = 0.0
-    if "desc_ia" not in st.session_state: st.session_state.desc_ia = ""
+    # Garante que o arquivo exista e esteja correto
+    if not os.path.exists(DB_FILE):
+        df = pd.DataFrame(columns=COLunas)
+        df.to_csv(DB_FILE, index=False)
+    else:
+        df = pd.read_csv(DB_FILE)
+        if len(df.columns) != len(COLunas):
+            os.remove(DB_FILE) # Apaga se estiver incompatível
+            st.rerun()
 
-    st.title("🎯 Lançamento Rápido com IA")
+    # Estados iniciais
+    if "v_ia" not in st.session_state: st.session_state.v_ia = 0.0
+    if "d_ia" not in st.session_state: st.session_state.d_ia = ""
+
+    st.title("🏠 Finanças Inteligentes")
     
-    col_foto, col_dados = st.columns([1, 1])
+    c_foto, c_form = st.columns([1, 1])
 
-    with col_foto:
-        st.subheader("📷 Tirar Foto")
-        # camera_input por padrão usa a resolução máxima do dispositivo
-        foto = st.camera_input("Foque no TOTAL da nota")
-        
+    with c_foto:
+        foto = st.camera_input("Tire foto do cupom")
         if foto:
-            with st.spinner('Processando imagem em HD...'):
-                d, v = extrair_dados_alta_precisao(foto)
-                st.session_state.valor_ia = float(v)
-                st.session_state.desc_ia = d
+            d, v = extrair_dados_alta_precisao(foto)
+            st.session_state.d_ia = d
+            st.session_state.v_ia = v
 
-    with col_dados:
-        st.subheader("📝 Confirmar Dados")
-        with st.form("confirm_ia", clear_on_submit=True):
-            tipo = st.radio("Tipo", ["Saída (Gasto)", "Entrada (Ganho)"], horizontal=True)
-            
-            # OS CAMPOS SÃO PREENCHIDOS AQUI
-            desc = st.text_input("Descrição", value=st.session_state.desc_ia)
-            valor = st.number_input("Valor Identificado (R$)", value=st.session_state.valor_ia, format="%.2f")
-            
+    with c_form:
+        with st.form("confirmar", clear_on_submit=True):
+            tipo = st.radio("Fluxo", ["Saída (Gasto)", "Entrada (Ganho)"], horizontal=True)
+            desc = st.text_input("Descrição", value=st.session_state.d_ia)
+            valor = st.number_input("Valor (R$)", value=float(st.session_state.v_ia), format="%.2f")
             cat = st.selectbox("Categoria", sorted(["Alimentação", "Cartão de Crédito", "Lazer", "Moradia", "Salário", "Saúde", "Transporte", "Outros"]))
-            data = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
+            data = st.date_input("Data", datetime.now())
 
-            if st.form_submit_button("✅ SALVAR REGISTRO"):
-                if valor > 0:
-                    v_final = -valor if tipo == "Saída (Gasto)" else valor
-                    # Lógica de salvar no CSV igual à anterior
-                    df = pd.read_csv(DB_FILE)
-                    novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, v_final, cat, tipo]], columns=COLunas)
-                    df = pd.concat([df, novo], ignore_index=True)
-                    df.to_csv(DB_FILE, index=False)
-                    
-                    # Resetar estados
-                    st.session_state.valor_ia = 0.0
-                    st.session_state.desc_ia = ""
-                    st.success("Salvo!")
-                    st.rerun()
-                else:
-                    st.error("Valor não identificado. Por favor, digite manualmente ou tente outra foto.")
+            if st.form_submit_button("SALVAR"):
+                v_final = -valor if tipo == "Saída (Gasto)" else valor
+                novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, v_final, cat, tipo]], columns=COLunas)
+                df = pd.concat([df, novo], ignore_index=True)
+                df.to_csv(DB_FILE, index=False)
+                st.session_state.v_ia = 0.0
+                st.session_state.d_ia = ""
+                st.success("Salvo!")
+                st.rerun()
+
+    # Dashboard simples abaixo
+    if not df.empty:
+        st.divider()
+        saldo = df["Valor"].sum()
+        st.metric("Saldo Geral", f"R$ {saldo:.2f}")
+        fig = px.pie(df[df["Valor"]<0], values=df[df["Valor"]<0]["Valor"].abs(), names='Categoria', title="Gastos por Categoria")
+        st.plotly_chart(fig)
