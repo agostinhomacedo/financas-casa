@@ -12,7 +12,7 @@ def check_password():
         st.session_state.password = False
     if not st.session_state.password:
         senha = st.text_input("Digite a senha da casa:", type="password")
-        if senha == "1234": # <--- ALTERE AQUI
+        if senha == "2804": # <--- ALTERE AQUI
             st.session_state.password = True
             st.rerun()
         return False
