@@ -101,46 +101,59 @@ if check_password():
 
     st.title("🎯 Lançamento com Inteligência Artificial")
     
-    # Interface Lado a Lado (Conforme seu modelo)
+  # --- INTERFACE LADO A LADO ---
     col_foto, col_dados = st.columns([1, 1.2])
     
     with col_foto:
         st.subheader("1. Foto do Comprovante")
-        foto = st.camera_input("Foque no valor total da nota")
+        foto = st.camera_input("Tire a foto focando no valor total")
         
     with col_dados:
         st.subheader("2. Confirmação de Dados")
         
-        # Lógica de processamento da IA
-        desc_ia = ""
-        valor_ia = 0.0
+        # Inicializamos os valores que a IA vai preencher
+        # Usamos o session_state para que o valor persista durante o clique
+        if "desc_ia" not in st.session_state: st.session_state.desc_ia = ""
+        if "valor_ia" not in st.session_state: st.session_state.valor_ia = 0.0
         
+        # Se uma nova foto for tirada, rodamos a IA e atualizamos o estado
         if foto:
             with st.spinner('IA analisando nota...'):
                 img_pil = Image.open(foto)
-                desc_ia, valor_ia = extrair_dados_inteligente(img_pil)
+                d_ia, v_ia = extrair_dados_inteligente(img_pil)
+                st.session_state.desc_ia = d_ia
+                st.session_state.valor_ia = float(v_ia)
+                if v_ia > 0:
+                    st.success(f"Valor Detectado: R$ {v_ia:.2f}")
+                else:
+                    st.warning("Não consegui ler o valor. Tente aproximar mais a câmera.")
 
+        # O FORMULÁRIO AGORA PEGA OS VALORES DO SESSION_STATE
         with st.form("form_ia", clear_on_submit=True):
             tipo = st.radio("Tipo de Fluxo", ["Saída (Gasto)", "Entrada (Ganho)"], horizontal=True)
             
-            # Campos preenchidos automaticamente pela IA
-            desc = st.text_input("Descrição (IA)", value=desc_ia)
-            valor_confirmado = st.number_input("Valor Identificado (R$)", value=float(valor_ia), format="%.2f")
+            # Aqui acontece a mágica: o value é preenchido pelo que a IA extraiu
+            desc = st.text_input("Descrição", value=st.session_state.desc_ia)
+            valor_confirmado = st.number_input("Valor Identificado (R$)", value=st.session_state.valor_ia, format="%.2f")
             
             cat = st.selectbox("Categoria", sorted(["Alimentação", "Cartão de Crédito", "Lazer", "Moradia", "Salário", "Saúde", "Transporte", "Outros"]))
             data = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
             
             if st.form_submit_button("✅ CONFIRMAR E SALVAR"):
-                if desc == "" or valor_confirmado == 0:
-                    st.warning("Por favor, verifique a descrição e o valor.")
+                if valor_confirmado == 0:
+                    st.error("O valor não pode ser zero. Digite manualmente se a IA falhou.")
                 else:
                     valor_final = -valor_confirmado if tipo == "Saída (Gasto)" else valor_confirmado
                     novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, valor_final, cat, tipo]], columns=COLunas)
                     df = pd.concat([df, novo], ignore_index=True)
                     df.to_csv(DB_FILE, index=False)
-                    st.success("Registro salvo com sucesso!")
+                    
+                    # Limpa o estado para o próximo registro
+                    st.session_state.desc_ia = ""
+                    st.session_state.valor_ia = 0.0
+                    
+                    st.success("Salvo com sucesso!")
                     st.rerun()
-
     # --- DASHBOARD DE GRÁFICOS ---
     if not df.empty:
         st.divider()
