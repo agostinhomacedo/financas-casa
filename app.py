@@ -26,11 +26,18 @@ if check_password():
     st.title("🏠 Finanças da Família")
 
     DB_FILE = "dados_financeiros.csv"
+    COLunas = ["Data", "Descrição", "Valor", "Categoria", "Tipo"]
+
+    # --- TRAVA DE SEGURANÇA PARA O ERRO DE COLUNAS ---
     if not os.path.exists(DB_FILE):
-        df = pd.DataFrame(columns=["Data", "Descrição", "Valor", "Categoria", "Tipo"])
+        df = pd.DataFrame(columns=COLunas)
         df.to_csv(DB_FILE, index=False)
     else:
         df = pd.read_csv(DB_FILE)
+        # Se o arquivo antigo tiver menos colunas que o novo, a gente reseta ele para evitar o erro
+        if len(df.columns) != len(COLunas):
+            df = pd.DataFrame(columns=COLunas)
+            df.to_csv(DB_FILE, index=False)
 
     # --- ENTRADA DE DADOS ---
     with st.sidebar:
@@ -42,13 +49,11 @@ if check_password():
         data = st.date_input("Data", datetime.now())
         
         if st.button("💾 Salvar Registro"):
-            # Se for Saída, o valor fica negativo automaticamente
             valor_final = -valor_input if tipo == "Saída (Gasto)" else valor_input
-            
-            novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, valor_final, cat, tipo]], columns=df.columns)
+            novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, valor_final, cat, tipo]], columns=COLunas)
             df = pd.concat([df, novo], ignore_index=True)
             df.to_csv(DB_FILE, index=False)
-            st.success("Salvo com sucesso!")
+            st.success("Salvo!")
             st.rerun()
 
     # --- PAINEL VISUAL ---
@@ -62,7 +67,6 @@ if check_password():
         c2.metric("Saídas", f"R$ {abs(gastos):.2f}", delta_color="inverse")
         c3.metric("Saldo Atual", f"R$ {saldo:.2f}")
 
-        # Gráfico de Pizza
         df_gastos = df[df["Valor"] < 0].copy()
         if not df_gastos.empty:
             st.subheader("🍕 Divisão de Gastos")
@@ -70,19 +74,15 @@ if check_password():
             fig = px.pie(df_gastos, values='Valor_Abs', names='Categoria', hole=0.4)
             st.plotly_chart(fig, use_container_width=True)
 
-        # --- GERENCIAR LANÇAMENTOS ---
         st.divider()
         st.subheader("📄 Histórico e Exclusão")
         
-        # Exibe a tabela com um índice para exclusão
-        for i, row in df.iloc[::-1].iterrows(): # Mostra do mais novo para o mais antigo
+        for i, row in df.iloc[::-1].iterrows():
             col_data, col_desc, col_val, col_btn = st.columns([2, 3, 2, 1])
             cor = "red" if row['Valor'] < 0 else "green"
-            
             col_data.write(row['Data'])
             col_desc.write(row['Descrição'])
             col_val.write(f":{cor}[R$ {row['Valor']:.2f}]")
-            
             if col_btn.button("🗑️", key=f"del_{i}"):
                 df = df.drop(i)
                 df.to_csv(DB_FILE, index=False)
