@@ -17,8 +17,46 @@ def check_password():
     if "password" not in st.session_state:
         st.session_state.password = False
     
+    # Inicializa a string da senha se não existir
+    if "senha_digitada" not in st.session_state:
+        st.session_state.senha_digitada = ""
+
     if not st.session_state.password:
         st.title("🔐 Acesso Restrito")
+        st.markdown("### Digite a senha da casa:")
+        
+        # Exibe visualmente o progresso da senha (asteriscos)
+        display_senha = " * " * len(st.session_state.senha_digitada)
+        st.subheader(f"[{display_senha if display_senha else ' Aguardando... '}]")
+        
+        # Cria o teclado numérico 3x3 usando colunas
+        for row in [[1, 2, 3], [4, 5, 6], [7, 8, 9]]:
+            cols = st.columns(3)
+            for i, num in enumerate(row):
+                if cols[i].button(str(num), use_container_width=True, key=f"btn_{num}"):
+                    st.session_state.senha_digitada += str(num)
+                    st.rerun()
+
+        # Linha inferior: Limpar, Zero e Entrar
+        c1, c2, c3 = st.columns(3)
+        if c1.button("Limpar ❌", use_container_width=True):
+            st.session_state.senha_digitada = ""
+            st.rerun()
+            
+        if c2.button("0", use_container_width=True, key="btn_0"):
+            st.session_state.senha_digitada += "0"
+            st.rerun()
+            
+        if c3.button("Entrar 🔓", type="primary", use_container_width=True):
+            if st.session_state.senha_digitada == "1234": # <--- COLOQUE SUA SENHA AQUI
+                st.session_state.password = True
+                st.rerun()
+            else:
+                st.error("Senha incorreta!")
+                st.session_state.senha_digitada = ""
+        
+        return False
+    return True
         
         # Usando number_input para forçar o teclado numérico no celular
         # O value=None e o placeholder ajudam na estética
