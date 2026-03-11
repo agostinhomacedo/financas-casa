@@ -49,7 +49,7 @@ def check_password():
                 st.rerun()
             
         if c3.button("Entrar 🔓", type="primary", use_container_width=True):
-            if st.session_state.senha_digitada == "1234": # <--- COLOQUE SUA SENHA AQUI
+            if st.session_state.senha_digitada == "2804": # <--- COLOQUE SUA SENHA AQUI
                 st.session_state.password = True
                 st.rerun()
             else:
