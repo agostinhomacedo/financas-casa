@@ -45,7 +45,7 @@ if check_password():
         tipo = st.radio("Tipo de Transação", ["Saída (Gasto)", "Entrada (Ganho)"])
         desc = st.text_input("Descrição", placeholder="Ex: Aluguel")
         valor_input = st.number_input("Valor", min_value=0.0, format="%.2f", step=1.0)
-        cat = st.selectbox("Categoria", ["Alimentação", "Moradia", "Lazer", "Salário", "Transporte", "Saúde", "Outros", "Cartão Crédito, Aplicação Financeira"])
+        cat = st.selectbox("Categoria", ["Alimentação", "Moradia", "Lazer", "Salário", "Transporte", "Saúde", "Outros", "Cartão Crédito", "Aplicação Financeira"])
         data = st.date_input("Data", datetime.now())
         
         if st.button("💾 Salvar Registro"):
