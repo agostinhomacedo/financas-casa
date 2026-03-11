@@ -4,41 +4,54 @@ import plotly.express as px
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(
-    page_title="Minha Casa Finanças", 
-    layout="centered", 
-    page_icon="💰"
-)
+# --- 1. CONFIGURAÇÃO DE INTERFACE "NATIVA" ---
+st.set_page_config(page_title="Minha Casa", layout="centered", page_icon="💰")
 
-# CSS para ajustar o tamanho dos botões e layout mobile
+# CSS Avançado para forçar visual de App Mobile
 st.markdown("""
     <style>
-    /* Ajusta o preenchimento superior em dispositivos móveis */
-    .main > div { padding-top: 1rem; }
+    /* Remove margens desnecessárias e fixa o fundo */
+    .main { background-color: #f8f9fa; }
+    .block-container { padding: 1rem !important; max-width: 450px !important; }
     
-    /* Estilização dos botões do teclado para não ficarem gigantes */
-    div.stButton > button {
-        height: 60px !important;
-        font-size: 20px !important;
-        border-radius: 12px;
-        margin-bottom: -5px;
+    /* Estilização do Teclado para ser compacto e centralizado */
+    .stButton > button {
+        height: 55px !important;
+        font-size: 22px !important;
+        font-weight: bold !important;
+        border-radius: 15px !important;
+        background-color: white !important;
+        border: 1px solid #ddd !important;
+        box-shadow: 0px 2px 4px rgba(0,0,0,0.05) !important;
     }
     
-    /* Ajuste para o container de métricas não ocupar muito espaço vertical */
-    [data-testid="stMetricValue"] {
-        font-size: 1.8rem !important;
+    /* Botão de Entrar (OK) em destaque */
+    button[kind="primary"] {
+        background-color: #2e7d32 !important;
+        color: white !important;
+        border: none !important;
     }
+
+    /* Cards para o histórico */
+    .css-1r6slb0 { 
+        background-color: white; 
+        padding: 15px; 
+        border-radius: 15px; 
+        margin-bottom: 10px;
+        box-shadow: 0px 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    /* Esconder o menu lateral em telas muito pequenas se desejar, 
+       mas aqui vamos focar no teclado */
     </style>
     """, unsafe_allow_html=True)
 
-# Conexão com Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def formatar_moeda(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# --- 2. SISTEMA DE ACESSO (TECLADO VIRTUAL) ---
+# --- 2. TECLADO VIRTUAL COMPACTO ---
 def check_password():
     if "password" not in st.session_state:
         st.session_state.password = False
@@ -46,122 +59,113 @@ def check_password():
         st.session_state.senha_digitada = ""
 
     if not st.session_state.password:
-        st.markdown("<h3 style='text-align: center;'>🔐 Acesso Restrito</h3>", unsafe_allow_html=True)
+        st.markdown("<br><h2 style='text-align: center;'>🔒</h2>", unsafe_allow_html=True)
         
-        # Display da senha (bolinhas)
-        display = " ● " * len(st.session_state.senha_digitada)
-        st.markdown(f"<h1 style='text-align: center; color: #31333F;'>{display if display else '____'}</h1>", unsafe_allow_html=True)
+        # Display de senha minimalista
+        display = " • " * len(st.session_state.senha_digitada)
+        placeholder = " ○ " * (4 - len(st.session_state.senha_digitada))
+        st.markdown(f"<h1 style='text-align: center; letter-spacing: 10px; color: #333;'>{display}{placeholder}</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: gray;'>Insira a senha da casa</p>", unsafe_allow_html=True)
 
-        # Container centralizado para o teclado não esticar no celular
-        _, col_centro, _ = st.columns([1, 4, 1])
+        # Teclado Numérico (Forçado a ser pequeno)
+        # Usamos colunas com proporções para manter o teclado estreito no meio da tela
+        _, col_key, _ = st.columns([0.1, 0.8, 0.1])
         
-        with col_centro:
-            # Teclado 1-9
+        with col_key:
             for row in [[1, 2, 3], [4, 5, 6], [7, 8, 9]]:
-                cols = st.columns(3)
-                for i, num in enumerate(row):
-                    if cols[i].button(str(num), key=f"btn_{num}", use_container_width=True):
-                        if len(st.session_state.senha_digitada) < 4:
-                            st.session_state.senha_digitada += str(num)
-                            st.rerun()
+                c1, c2, c3 = st.columns(3)
+                if c1.button(str(row[0]), key=f"k{row[0]}"):
+                    if len(st.session_state.senha_digitada) < 4:
+                        st.session_state.senha_digitada += str(row[0])
+                        st.rerun()
+                if c2.button(str(row[1]), key=f"k{row[1]}"):
+                    if len(st.session_state.senha_digitada) < 4:
+                        st.session_state.senha_digitada += str(row[1])
+                        st.rerun()
+                if c3.button(str(row[2]), key=f"k{row[2]}"):
+                    if len(st.session_state.senha_digitada) < 4:
+                        st.session_state.senha_digitada += str(row[2])
+                        st.rerun()
 
-            # Linha 0 e Controles
             c1, c2, c3 = st.columns(3)
-            if c1.button("❌", key="clear", use_container_width=True):
-                st.session_state.senha_digitada = ""
+            if c1.button("⌫", key="del"):
+                st.session_state.senha_digitada = st.session_state.senha_digitada[:-1]
                 st.rerun()
-            if c2.button("0", key="btn_0", use_container_width=True):
+            if c2.button("0", key="k0"):
                 if len(st.session_state.senha_digitada) < 4:
                     st.session_state.senha_digitada += "0"
                     st.rerun()
-            if c3.button("OK", type="primary", key="enter", use_container_width=True):
-                if st.session_state.senha_digitada == "2804": # <--- SUA SENHA AQUI
+            if c3.button("OK", type="primary", key="ok"):
+                if st.session_state.senha_digitada == "1234":
                     st.session_state.password = True
                     st.rerun()
                 else:
-                    st.error("Senha Incorreta")
+                    st.error("Senha incorreta")
                     st.session_state.senha_digitada = ""
         return False
     return True
 
-# --- 3. EXECUÇÃO DO APLICATIVO ---
+# --- 3. CONTEÚDO PRINCIPAL ---
 if check_password():
-    st.title("🏠 Finanças da Família")
-
-    # Carregar dados da Planilha
+    st.markdown("<h3 style='margin-bottom:0;'>🏠 Minha Casa</h3>", unsafe_allow_html=True)
+    
     try:
-        df = conn.read(ttl="0")
-        df = df.dropna(how="all")
+        df = conn.read(ttl="0").dropna(how="all")
     except:
         df = pd.DataFrame(columns=["Data", "Descrição", "Valor", "Categoria", "Tipo"])
 
-    # Sidebar para novos registros
-    with st.sidebar:
-        st.header("➕ Novo Registro")
-        with st.form("add_form", clear_on_submit=True):
-            tipo = st.radio("Tipo", ["Saída (Gasto)", "Entrada (Ganho)"])
-            desc = st.text_input("Descrição", placeholder="Ex: Mercado")
-            valor_in = st.number_input("Valor", min_value=0.0, format="%.2f")
-            cat = st.selectbox("Categoria", ["Alimentação", "Moradia", "Lazer", "Salário", "Transporte", "Saúde", "Educação", "Outros"])
-            data_in = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
-            
-            if st.form_submit_button("💾 Salvar no Google Sheets", use_container_width=True):
-                if desc and valor_in > 0:
-                    valor_final = -valor_in if tipo == "Saída (Gasto)" else valor_in
-                    novo_dado = pd.DataFrame([{
-                        "Data": data_in.strftime("%d/%m/%Y"),
-                        "Descrição": desc,
-                        "Valor": valor_final,
-                        "Categoria": cat,
-                        "Tipo": tipo
-                    }])
-                    df_novo = pd.concat([df, novo_dado], ignore_index=True)
-                    conn.update(data=df_novo)
-                    st.success("Salvo com sucesso!")
-                    st.rerun()
-                else:
-                    st.error("Preencha Descrição e Valor!")
-
-    # Painel de Resumo
+    # Métricas em Cards pequenos
     if not df.empty:
         df["Valor"] = pd.to_numeric(df["Valor"])
-        ganhos = df[df["Valor"] > 0]["Valor"].sum()
-        gastos = df[df["Valor"] < 0]["Valor"].sum()
+        saldo = df["Valor"].sum()
         
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Ganhos", formatar_moeda(ganhos))
-        m2.metric("Gastos", formatar_moeda(abs(gastos)))
-        m3.metric("Saldo", formatar_moeda(ganhos + gastos))
+        # Layout de métricas horizontal mas compacto
+        st.markdown(f"""
+            <div style="background-color: white; padding: 20px; border-radius: 20px; text-align: center; border: 1px solid #eee;">
+                <p style="color: gray; margin-bottom: 5px;">Saldo Atual</p>
+                <h2 style="margin: 0; color: {'#2e7d32' if saldo >= 0 else '#c62828'};">{formatar_moeda(saldo)}</h2>
+            </div>
+        """, unsafe_allow_html=True)
 
-        # Gráfico de Gastos
-        df_gastos = df[df["Valor"] < 0].copy()
-        if not df_gastos.empty:
-            st.subheader("🍕 Divisão de Gastos")
-            fig = px.pie(df_gastos, values=df_gastos["Valor"].abs(), names='Categoria', hole=0.4)
-            fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=True)
-            st.plotly_chart(fig, use_container_width=True)
+    # Botão flutuante simulado para Adicionar (Sidebar)
+    st.sidebar.header("➕ Novo Gasto/Ganho")
+    with st.sidebar.form("novo"):
+        tipo = st.selectbox("Tipo", ["Saída (Gasto)", "Entrada (Ganho)"])
+        desc = st.text_input("O que é?")
+        val = st.number_input("Quanto?", min_value=0.0)
+        cat = st.selectbox("Categoria", ["Alimentação", "Moradia", "Lazer", "Transporte", "Saúde", "Outros"])
+        data = st.date_input("Quando?", datetime.now())
+        if st.form_submit_button("Salvar Registro", use_container_width=True):
+            if desc and val > 0:
+                v_final = -val if tipo == "Saída (Gasto)" else val
+                novo = pd.DataFrame([{"Data": data.strftime("%d/%m/%Y"), "Descrição": desc, "Valor": v_final, "Categoria": cat, "Tipo": tipo}])
+                df = pd.concat([df, novo], ignore_index=True)
+                conn.update(data=df)
+                st.rerun()
 
-        # Histórico Responsivo
-        st.divider()
-        st.subheader("📄 Histórico Recente")
-        
+    # Histórico estilo "Extrato de Banco"
+    st.markdown("<br><b>Extrato Recente</b>", unsafe_allow_html=True)
+    if not df.empty:
         for i, row in df.iloc[::-1].iterrows():
-            with st.container():
-                c_data, c_info, c_btn = st.columns([2, 4, 1])
-                cor = "red" if float(row['Valor']) < 0 else "green"
-                
-                c_data.write(f"**{row['Data']}**")
-                c_info.write(f":{cor}[{formatar_moeda(float(row['Valor']))}]")
-                
-                if c_btn.button("🗑️", key=f"del_{i}"):
-                    df_upd = df.drop(i)
-                    conn.update(data=df_upd)
-                    st.rerun()
-                
-                st.caption(f"{row['Descrição']} | {row['Categoria']}")
-                st.markdown("---")
+            cor_valor = "#c62828" if float(row['Valor']) < 0 else "#2e7d32"
+            simbolo = "" if float(row['Valor']) < 0 else "+"
+            
+            st.markdown(f"""
+                <div style="background-color: white; padding: 12px; border-radius: 15px; margin-bottom: 8px; border-left: 5px solid {cor_valor}; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <small style="color: gray;">{row['Data']}</small><br>
+                        <b>{row['Descrição']}</b><br>
+                        <small>{row['Categoria']}</small>
+                    </div>
+                    <div style="text-align: right;">
+                        <b style="color: {cor_valor};">{simbolo}{formatar_moeda(float(row['Valor']))}</b>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            # Botão de deletar pequeno logo abaixo do card
+            if st.button(f"Remover item {i}", key=f"del_{i}", help="Clique para apagar"):
+                df = df.drop(i)
+                conn.update(data=df)
+                st.rerun()
     else:
-        st.info("Nenhum registro encontrado na planilha.")
-
-# Rodapé simples
-st.markdown("<p style='text-align: center; color: grey;'>Sistema Financeiro Familiar v2.0</p>", unsafe_allow_html=True)
+        st.info("Nenhum gasto registrado.")
