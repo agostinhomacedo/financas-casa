@@ -19,7 +19,8 @@ def check_password():
         st.session_state.password = False
     if not st.session_state.password:
         st.title("🔐 Acesso Restrito")
-        senha = st.text_input("Digite a senha da casa:", type="password")
+        # Troque a linha da senha por esta:
+senha = st.number_input("Digite a senha da casa:", step=1, value=None, placeholder="____")
         if st.button("Entrar"):
             if senha == "1234":
                 st.session_state.password = True
