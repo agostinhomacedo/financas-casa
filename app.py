@@ -7,6 +7,11 @@ import os
 # --- CONFIGURAÇÃO ---
 st.set_page_config(page_title="Minha Casa Finanças", layout="centered", page_icon="💰")
 
+# Função para limpar os campos após salvar
+def limpar_campos():
+    st.session_state.desc_input = ""
+    st.session_state.valor_input = 0.0
+
 def check_password():
     if "password" not in st.session_state:
         st.session_state.password = False
@@ -28,13 +33,12 @@ if check_password():
     DB_FILE = "dados_financeiros.csv"
     COLunas = ["Data", "Descrição", "Valor", "Categoria", "Tipo"]
 
-    # --- TRAVA DE SEGURANÇA PARA O ERRO DE COLUNAS ---
+    # Inicializa o arquivo se não existir
     if not os.path.exists(DB_FILE):
         df = pd.DataFrame(columns=COLunas)
         df.to_csv(DB_FILE, index=False)
     else:
         df = pd.read_csv(DB_FILE)
-        # Se o arquivo antigo tiver menos colunas que o novo, a gente reseta ele para evitar o erro
         if len(df.columns) != len(COLunas):
             df = pd.DataFrame(columns=COLunas)
             df.to_csv(DB_FILE, index=False)
@@ -43,18 +47,27 @@ if check_password():
     with st.sidebar:
         st.header("➕ Novo Registro")
         tipo = st.radio("Tipo de Transação", ["Saída (Gasto)", "Entrada (Ganho)"])
-        desc = st.text_input("Descrição", placeholder="Ex: Aluguel")
-        valor_input = st.number_input("Valor", min_value=0.0, format="%.2f", step=1.0)
+        
+        # Usando session_state para permitir a limpeza automática
+        desc = st.text_input("Descrição", placeholder="Ex: Aluguel", key="desc_input")
+        valor_input = st.number_input("Valor", min_value=0.0, format="%.2f", step=1.0, key="valor_input")
+        
         cat = st.selectbox("Categoria", ["Alimentação", "Moradia", "Lazer", "Salário", "Transporte", "Saúde", "Outros", "Cartão Crédito", "Aplicação Financeira"])
         data = st.date_input("Data", datetime.now())
         
         if st.button("💾 Salvar Registro"):
-            valor_final = -valor_input if tipo == "Saída (Gasto)" else valor_input
-            novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, valor_final, cat, tipo]], columns=COLunas)
-            df = pd.concat([df, novo], ignore_index=True)
-            df.to_csv(DB_FILE, index=False)
-            st.success("Salvo!")
-            st.rerun()
+            if desc == "" or valor_input == 0:
+                st.warning("Preencha a descrição e o valor!")
+            else:
+                valor_final = -valor_input if tipo == "Saída (Gasto)" else valor_input
+                novo = pd.DataFrame([[data.strftime("%d/%m/%Y"), desc, valor_final, cat, tipo]], columns=COLunas)
+                df = pd.concat([df, novo], ignore_index=True)
+                df.to_csv(DB_FILE, index=False)
+                
+                st.success("Salvo!")
+                # Chama a limpeza e recarrega a página
+                limpar_campos()
+                st.rerun()
 
     # --- PAINEL VISUAL ---
     if not df.empty:
@@ -77,6 +90,7 @@ if check_password():
         st.divider()
         st.subheader("📄 Histórico e Exclusão")
         
+        # Exibição inversa para ver os últimos primeiro
         for i, row in df.iloc[::-1].iterrows():
             col_data, col_desc, col_val, col_btn = st.columns([2, 3, 2, 1])
             cor = "red" if row['Valor'] < 0 else "green"
