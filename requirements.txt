@@ -1,12 +1,3 @@
-streamlit
-pandas
-plotly
-opencv-python-headless
-pytesseract
-numpy
-Pillow
-st-gsheets-connection
-gradio
 pandas
 streamlit-gsheets
 plotly
