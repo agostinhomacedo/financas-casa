@@ -3,13 +3,19 @@ import pandas as pd
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
-# --- DESIGN MODERNO ---
+# --- CONFIGURAÇÃO VISUAL ---
 st.set_page_config(page_title="Minha Casa", layout="centered")
 
 st.markdown("""
     <style>
-    html, body, [class*="css"] { background-color: #000000 !important; color: #FFFFFF !important; }
+    /* Estilo Dark Moderno */
+    html, body, [class*="css"] { 
+        background-color: #000000 !important; 
+        color: #FFFFFF !important; 
+    }
     .block-container { max-width: 400px !important; padding: 1rem !important; }
+    
+    /* Cards de Gastos */
     .gasto-card {
         background: #111;
         padding: 15px;
@@ -20,6 +26,8 @@ st.markdown("""
         justify-content: space-between;
         align-items: center;
     }
+    
+    /* Esconder menus do Streamlit */
     header, footer, #MainMenu { visibility: hidden; }
     </style>
     """, unsafe_allow_html=True)
@@ -31,12 +39,13 @@ try:
     df = conn.read(ttl="0").dropna(how="all")
     df["Valor"] = pd.to_numeric(df["Valor"])
     saldo = df["Valor"].sum()
-except:
+except Exception:
     saldo, df = 0, pd.DataFrame(columns=["Data", "Descrição", "Valor"])
 
 # --- CONTEÚDO ---
 st.markdown("<h2 style='text-align: center;'>🏠 Finanças Casa</h2>", unsafe_allow_html=True)
 
+# Card de Saldo
 st.markdown(f"""
     <div style="background: #111; padding: 20px; border-radius: 20px; border: 1px solid #32D74B; text-align: center; margin-bottom: 20px;">
         <p style="color: #888; margin: 0; font-size: 14px;">SALDO DISPONÍVEL</p>
@@ -44,9 +53,10 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-with st.expander("➕ LANÇAR NOVO GASTO"):
+# Lançamento Rápido
+with st.expander("➕ NOVO GASTO"):
     with st.form("add", clear_on_submit=True):
-        desc = st.text_input("Descrição")
+        desc = st.text_input("Descrição", placeholder="Ex: Mercado")
         valor = st.number_input("Valor", min_value=0.0, step=1.0)
         if st.form_submit_button("SALVAR AGORA", use_container_width=True):
             if desc and valor > 0:
@@ -56,16 +66,18 @@ with st.expander("➕ LANÇAR NOVO GASTO"):
                 st.success("Salvo!")
                 st.rerun()
 
+# Histórico
 st.markdown("<br><b>HISTÓRICO RECENTE</b>", unsafe_allow_html=True)
-for i, row in df.iloc[::-1].head(15).iterrows():
-    st.markdown(f"""
-        <div class="gasto-card">
-            <div>
-                <div style="font-weight: 600;">{row['Descrição']}</div>
-                <div style="color: #888; font-size: 12px;">{row['Data']}</div>
+if not df.empty:
+    for i, row in df.iloc[::-1].head(15).iterrows():
+        st.markdown(f"""
+            <div class="gasto-card">
+                <div>
+                    <div style="font-weight: 600; color: white;">{row['Descrição']}</div>
+                    <div style="color: #888; font-size: 12px;">{row['Data']}</div>
+                </div>
+                <div style="color: #FF453A; font-weight: bold; font-size: 16px;">
+                    R$ {abs(row['Valor']):,.2f}
+                </div>
             </div>
-            <div style="color: #FF453A; font-weight: bold; font-size: 16px;">
-                R$ {abs(row['Valor']):,.2f}
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
