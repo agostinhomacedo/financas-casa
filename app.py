@@ -3,121 +3,101 @@ import pandas as pd
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
-# --- 1. CSS ULTRA-COMPACTO E INQUEBRÁVEL ---
-st.set_page_config(page_title="Finanças", layout="centered")
+# --- 1. CONFIGURAÇÃO VISUAL (ALTO CONTRASTE) ---
+st.set_page_config(page_title="Minha Casa", layout="centered")
 
 st.markdown("""
     <style>
-    /* Trava o fundo e a fonte */
-    html, body, [class*="css"] { background-color: #000000 !important; color: #FFFFFF; }
+    /* Fundo preto e texto branco puro para enxergar no celular */
+    html, body, [class*="css"] { 
+        background-color: #000000 !important; 
+        color: #FFFFFF !important; 
+    }
     
-    /* Trava o tamanho do App no celular */
-    .block-container { max-width: 320px !important; padding: 0.5rem !important; margin: auto; }
-
-    /* FORÇA 3 COLUNAS - O segredo para não empilhar na vertical */
-    [data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 5px !important;
-        margin-bottom: -25px !important;
+    .block-container { 
+        max-width: 400px !important; 
+        padding: 1rem !important; 
     }
-    [data-testid="column"] { flex: 1 !important; min-width: 0px !important; }
 
-    /* TECLAS PEQUENAS E ACHATADAS */
-    .stButton > button {
-        height: 42px !important;
-        background: #1C1C1E !important;
-        color: #FFFFFF !important;
-        border-radius: 10px !important;
-        font-size: 18px !important;
-        font-weight: bold !important;
-        border: 1px solid #333 !important;
-    }
-    button[kind="primary"] { background: #32D74B !important; color: #000 !important; border: none !important; }
-
-    /* CARDS DE LANÇAMENTO (ALTO CONTRASTE) */
-    .card {
-        background: #111;
-        padding: 10px;
+    /* Cards de Gastos: Fundo cinza escuro com borda verde */
+    .gasto-card {
+        background: #1A1A1A;
+        padding: 15px;
         border-radius: 12px;
+        border-left: 5px solid #32D74B;
+        margin-bottom: 10px;
         border: 1px solid #333;
-        margin-bottom: 5px;
     }
-    .card b { color: #FFFFFF !important; }
-    .card span { color: #888 !important; font-size: 11px; }
-
-    /* Esconde lixo visual */
+    
+    /* Cores dos textos nos cards */
+    .gasto-card b { color: #FFFFFF !important; font-size: 16px; }
+    .gasto-card span { color: #AAAAAA !important; font-size: 12px; }
+    
+    /* Esconde elementos desnecessários do Streamlit */
     header, footer, #MainMenu { visibility: hidden; }
     </style>
     """, unsafe_allow_html=True)
 
+# --- 2. CONEXÃO COM GOOGLE SHEETS ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- 2. LÓGICA DO PIN ---
-if "pin" not in st.session_state: st.session_state.pin = ""
-if "auth" not in st.session_state: st.session_state.auth = False
+try:
+    # Lê os dados da planilha
+    df = conn.read(ttl="0").dropna(how="all")
+    # Garante que a coluna Valor é numérica
+    df["Valor"] = pd.to_numeric(df["Valor"])
+    saldo = df["Valor"].sum()
+except:
+    saldo = 0
+    df = pd.DataFrame(columns=["Data", "Descrição", "Valor"])
 
-def add(n):
-    if len(st.session_state.pin) < 4: st.session_state.pin += str(n)
+# --- 3. EXIBIÇÃO DO DASHBOARD ---
+st.markdown("<h2 style='color: white; text-align: center;'>🏠 Minha Casa</h2>", unsafe_allow_html=True)
 
-if not st.session_state.auth:
-    st.markdown("<p style='text-align: center; color: #888; margin-top: 10px;'>PIN DE ACESSO</p>", unsafe_allow_html=True)
-    
-    # Display do PIN
-    visor = " ● " * len(st.session_state.pin) + " ○ " * (4 - len(st.session_state.pin))
-    st.markdown(f"<h2 style='text-align: center; color: #32D74B;'>{visor}</h2>", unsafe_allow_html=True)
+# Card de Saldo em destaque Verde Neon
+st.markdown(f"""
+    <div style="background: #1A1A1A; padding: 25px; border-radius: 20px; border: 2px solid #32D74B; text-align: center; margin-bottom: 20px;">
+        <p style="color: #AAAAAA; margin: 0; font-size: 14px;">SALDO TOTAL</p>
+        <h1 style="color: #32D74B; margin: 0; font-size: 42px;">R$ {saldo:,.2f}</h1>
+    </div>
+""", unsafe_allow_html=True)
 
-    # Teclado 3x3 que não quebra
-    for r in [[1,2,3],[4,5,6],[7,8,9]]:
-        c1, c2, c3 = st.columns(3)
-        if c1.button(str(r[0])): add(r[0]); st.rerun()
-        if c2.button(str(r[1])): add(r[1]); st.rerun()
-        if c3.button(str(r[2])): add(r[2]); st.rerun()
-    
-    c_del, c_zero, c_ok = st.columns(3)
-    if c_del.button("⌫"): st.session_state.pin = st.session_state.pin[:-1]; st.rerun()
-    if c_zero.button("0"): add(0); st.rerun()
-    if c_ok.button("OK", type="primary"):
-        if st.session_state.pin == "1234":
-            st.session_state.auth = True; st.rerun()
-        else:
-            st.toast("PIN Errado!"); st.session_state.pin = ""
-else:
-    # --- 3. ÁREA LOGADA (CONTRASTE MÁXIMO) ---
-    st.markdown("<h4 style='color: white;'>Saldo</h4>", unsafe_allow_html=True)
-    
-    try:
-        df = conn.read(ttl="0").dropna(how="all")
-        saldo = pd.to_numeric(df["Valor"]).sum()
-    except:
-        saldo, df = 0, pd.DataFrame(columns=["Data", "Descrição", "Valor"])
-
-    st.markdown(f"""
-        <div style="background: #111; padding: 15px; border-radius: 15px; border: 1px solid #32D74B; text-align: center;">
-            <h2 style="color: #32D74B; margin: 0;">R$ {saldo:,.2f}</h2>
-        </div>
-    """, unsafe_allow_html=True)
-
-    with st.sidebar:
-        st.header("Novo Gasto")
-        with st.form("f", clear_on_submit=True):
-            d = st.text_input("O que?")
-            v = st.number_input("Valor", min_value=0.0)
-            if st.form_submit_button("Salvar"):
-                novo = pd.DataFrame([{"Data": datetime.now().strftime("%d/%m"), "Descrição": d, "Valor": -v}])
-                df = pd.concat([df, novo], ignore_index=True)
-                conn.update(data=df)
+# --- 4. ÁREA DE LANÇAMENTO (SIMPLIFICADA) ---
+with st.expander("➕ ADICIONAR NOVO GASTO"):
+    with st.form("novo_gasto", clear_on_submit=True):
+        desc = st.text_input("O que comprou?")
+        valor = st.number_input("Valor (R$)", min_value=0.0, step=1.0)
+        
+        if st.form_submit_button("SALVAR NO GOOGLE SHEETS", use_container_width=True):
+            if desc and valor > 0:
+                novo_dado = pd.DataFrame([{
+                    "Data": datetime.now().strftime("%d/%m"),
+                    "Descrição": desc,
+                    "Valor": -valor # Salva como negativo por ser gasto
+                }])
+                df_atualizado = pd.concat([df, novo_dado], ignore_index=True)
+                conn.update(data=df_atualizado)
+                st.success("Salvo!")
                 st.rerun()
 
-    st.markdown("<br><b style='font-size: 12px;'>HISTÓRICO</b>", unsafe_allow_html=True)
-    for i, row in df.iloc[::-1].head(10).iterrows():
+# --- 5. HISTÓRICO DE LANÇAMENTOS ---
+st.markdown("<br><b style='color: white; letter-spacing: 1px;'>ÚLTIMOS LANÇAMENTOS</b>", unsafe_allow_html=True)
+
+if not df.empty:
+    # Mostra os últimos 15 itens (do mais novo para o mais velho)
+    for i, row in df.iloc[::-1].head(15).iterrows():
         st.markdown(f"""
-            <div class="card">
-                <div style="display: flex; justify-content: space-between;">
-                    <b>{row['Descrição']}</b>
-                    <b style="color: #FF453A;">R$ {abs(row['Valor']):,.2f}</b>
+            <div class="gasto-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <b>{row['Descrição']}</b><br>
+                        <span>{row['Data']}</span>
+                    </div>
+                    <b style="color: #FF453A !important; font-size: 18px;">
+                        R$ {abs(row['Valor']):,.2f}
+                    </b>
                 </div>
-                <span>{row['Data']}</span>
             </div>
         """, unsafe_allow_html=True)
+else:
+    st.info("Nenhum lançamento encontrado.")
