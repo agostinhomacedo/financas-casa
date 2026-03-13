@@ -6,3 +6,7 @@ pytesseract
 numpy
 Pillow
 st-gsheets-connection
+gradio
+pandas
+streamlit-gsheets
+plotly
