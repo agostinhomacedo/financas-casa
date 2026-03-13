@@ -4,81 +4,75 @@ import plotly.express as px
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
-# --- 1. CONFIGURAÇÃO DE UI/UX DE ALTA PERFORMANCE ---
-st.set_page_config(page_title="Finanças Pro", layout="centered", page_icon="💳")
+# --- 1. CONFIGURAÇÃO DE UI ULTRA-COMPACTA ---
+st.set_page_config(page_title="Finanças Pro", layout="centered", page_icon="💰")
 
-# Injeção de CSS para recriar a interface de um App Nativo
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
     
     html, body, [class*="css"] { 
         font-family: 'Inter', sans-serif; 
         background-color: #000000 !important; 
-        color: #FFFFFF !important;
     }
 
-    /* Trava o container para parecer um smartphone no Desktop também */
+    /* Ajuste do container principal para não criar rolagem desnecessária */
     .block-container {
         max-width: 400px !important;
-        padding: 1rem !important;
+        padding: 0.5rem !important;
+        margin: auto;
     }
 
-    /* --- TECLADO VIRTUAL INQUEBRÁVEL 3x3 --- */
-    /* Esta regra força os botões a ficarem lado a lado mesmo em telas minúsculas */
-    div[data-testid="stHorizontalBlock"] {
+    /* --- TECLADO COMPACTO (REDUZIDO) --- */
+    [data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
-        gap: 8px !important;
-        margin-bottom: -15px !important;
+        gap: 4px !important;
+        margin-bottom: -22px !important; /* "Cola" as linhas para o teclado ficar baixo */
     }
     
-    div[data-testid="column"] {
+    [data-testid="column"] {
         flex: 1 1 0% !important;
         min-width: 0px !important;
     }
 
-    /* Design das Teclas (Glassmorphism Dark) */
+    /* Botões do Teclado: Menores e com mais brilho */
     .stButton > button {
-        height: 55px !important;
-        border-radius: 16px !important;
-        background: rgba(28, 28, 30, 0.8) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        height: 45px !important; /* Altura reduzida para caber na tela */
+        border-radius: 12px !important;
+        background: #1C1C1E !important;
+        border: 1px solid #3A3A3C !important;
         color: #FFFFFF !important;
-        font-size: 22px !important;
-        font-weight: 600 !important;
-        backdrop-filter: blur(10px);
-        transition: 0.2s;
+        font-size: 18px !important;
+        padding: 0px !important;
     }
     
-    .stButton > button:active {
-        background: #32D74B !important; /* Verde Neon ao tocar */
-        color: #000 !important;
-    }
-
-    /* Botão OK (Ação Principal) */
+    /* Botão OK em destaque */
     button[kind="primary"] {
         background: #32D74B !important;
         color: #000 !important;
-        border: none !important;
-        font-weight: 800 !important;
+        font-weight: 700 !important;
     }
 
-    /* Cards de Transação Estilo Neo-Bank */
+    /* --- CORES DOS LANÇAMENTOS (ALTO CONTRASTE) --- */
     .finance-card {
         background: #1C1C1E;
-        padding: 15px;
-        border-radius: 20px;
-        margin-bottom: 10px;
-        border: 1px solid #2C2C2E;
+        padding: 12px;
+        border-radius: 15px;
+        margin-bottom: 8px;
+        border: 1px solid #3A3A3C;
         display: flex;
         justify-content: space-between;
         align-items: center;
     }
 
-    /* Esconde elementos poluídos do Streamlit */
-    #MainMenu, footer, header { visibility: hidden; }
+    /* Texto dentro dos cards - Branco Puro para leitura fácil */
+    .card-title { color: #FFFFFF; font-weight: 600; font-size: 14px; }
+    .card-sub { color: #A1A1AA; font-size: 11px; }
+    
+    /* Esconde elementos poluídos */
+    header, footer { visibility: hidden; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -87,20 +81,19 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def formatar_moeda(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# --- 2. LOGIN COM PIN (TECLADO VIRTUAL COMPACTO) ---
+# --- 2. ACESSO COM PIN ---
 def check_password():
     if "password" not in st.session_state: st.session_state.password = False
     if "senha_digitada" not in st.session_state: st.session_state.senha_digitada = ""
 
     if not st.session_state.password:
-        st.markdown("<h1 style='text-align: center; margin-top: 50px;'>🏦</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #8E8E93;'>Digite seu PIN de acesso</p>", unsafe_allow_html=True)
+        st.markdown("<h4 style='text-align: center; color: white; margin-top: 20px;'>Digite o PIN</h4>", unsafe_allow_html=True)
         
-        # Display de PIN Dinâmico
-        pins = "".join([f"<div style='width:12px; height:12px; border-radius:50%; background:{'#32D74B' if i < len(st.session_state.senha_digitada) else '#2C2C2E'}; margin:0 8px;'></div>" for i in range(4)])
-        st.markdown(f"<div style='display:flex; justify-content:center; margin:30px 0;'>{pins}</div>", unsafe_allow_html=True)
+        # Display de PIN (Bolinhas)
+        pins = "".join([f"<div style='width:10px; height:10px; border-radius:50%; background:{'#32D74B' if i < len(st.session_state.senha_digitada) else '#333'}; margin:0 6px;'></div>" for i in range(4)])
+        st.markdown(f"<div style='display:flex; justify-content:center; margin:20px 0;'>{pins}</div>", unsafe_allow_html=True)
 
-        # Renderização do Teclado 3x3
+        # Teclado 3x3
         with st.container():
             for row in [[1, 2, 3], [4, 5, 6], [7, 8, 9]]:
                 cols = st.columns(3)
@@ -119,56 +112,57 @@ def check_password():
                 if st.session_state.senha_digitada == "1234":
                     st.session_state.password = True; st.rerun()
                 else:
-                    st.toast("Senha Incorreta ❌"); st.session_state.senha_digitada = ""
+                    st.toast("Incorreta!"); st.session_state.senha_digitada = ""
         return False
     return True
 
-# --- 3. DASHBOARD PREMIUM (APÓS LOGIN) ---
+# --- 3. DASHBOARD ---
 if check_password():
     try:
         df = conn.read(ttl="0").dropna(how="all")
     except:
         df = pd.DataFrame(columns=["Data", "Descrição", "Valor", "Categoria", "Tipo"])
 
-    # Saldo com Estilo de Cartão de Crédito Black
+    # Saldo principal
     if not df.empty:
         df["Valor"] = pd.to_numeric(df["Valor"])
         saldo = df["Valor"].sum()
-        
         st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #1C1C1E 0%, #000000 100%); padding: 25px; border-radius: 24px; border: 1px solid #32D74B; margin-bottom: 25px;">
-                <small style="color: #8E8E93;">Saldo Disponível</small>
-                <h1 style="color: #32D74B; margin: 0; font-size: 38px;">{formatar_moeda(saldo)}</h1>
-                <div style="margin-top: 15px; font-size: 10px; color: #444;">DATA SYNC: {datetime.now().strftime('%H:%M:%S')}</div>
+            <div style="background: #1C1C1E; padding: 20px; border-radius: 20px; border: 1px solid #32D74B; margin-bottom: 15px; text-align: center;">
+                <p style="color: #A1A1AA; margin: 0; font-size: 12px;">Saldo da Casa</p>
+                <h2 style="color: #32D74B; margin: 0;">{formatar_moeda(saldo)}</h2>
             </div>
         """, unsafe_allow_html=True)
 
-        # Insights Rápidos (Gráfico Donut Minimalista)
-        df_g = df[df["Valor"] < 0].copy()
-        if not df_g.empty:
-            fig = px.pie(df_g, values=df_g["Valor"].abs(), names='Categoria', hole=0.8,
-                         color_discrete_sequence=["#32D74B", "#1C1C1E", "#444", "#8E8E93"])
-            fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False, height=180, 
-                              paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig, use_container_width=True)
+    # Gráfico Compacto em Abas
+    if not df.empty:
+        t1, t2 = st.tabs(["Pizza", "Fluxo"])
+        with t1:
+            df_g = df[df["Valor"] < 0]
+            if not df_g.empty:
+                fig = px.pie(df_g, values=df_g["Valor"].abs(), names='Categoria', hole=0.7)
+                fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False, height=140, paper_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig, use_container_width=True)
+        with t2:
+            st.bar_chart(df.tail(5), x="Data", y="Valor", color="Tipo", height=140)
 
-    # Botão de Ação Flutuante (Add via Sidebar)
+    # Novo Registro na Sidebar
     with st.sidebar:
-        st.markdown("### ⚡ Nova Transação")
-        with st.form("add_form", clear_on_submit=True):
-            tipo = st.radio("Operação", ["Saída", "Entrada"], horizontal=True)
-            desc = st.text_input("Título", placeholder="Ex: Aluguel")
+        st.header("➕ Lançar")
+        with st.form("f", clear_on_submit=True):
+            tipo = st.radio("Tipo", ["Saída", "Entrada"], horizontal=True)
+            desc = st.text_input("O que é?")
             val = st.number_input("Valor", min_value=0.0)
-            if st.form_submit_button("Confirmar", use_container_width=True):
+            if st.form_submit_button("Salvar", use_container_width=True):
                 if desc and val > 0:
-                    v_final = -val if tipo == "Saída" else val
-                    n = pd.DataFrame([{"Data": datetime.now().strftime("%d/%m/%Y"), "Descrição": desc, "Valor": v_final, "Categoria": "Geral", "Tipo": tipo}])
+                    v = -val if tipo == "Saída" else val
+                    n = pd.DataFrame([{"Data": datetime.now().strftime("%d/%m"), "Descrição": desc, "Valor": v, "Categoria": "Geral", "Tipo": tipo}])
                     df = pd.concat([df, n], ignore_index=True)
                     conn.update(data=df)
-                    st.toast("Transação Salva! ✅"); st.rerun()
+                    st.rerun()
 
-    # Timeline de Movimentações (Estilo Extrato Moderno)
-    st.markdown("<p style='color: #8E8E93; font-weight: 600; font-size: 12px; letter-spacing: 1px;'>ATIVIDADE RECENTE</p>", unsafe_allow_html=True)
+    # Histórico de Lançamentos (ALTO CONTRASTE)
+    st.markdown("<p style='font-size: 12px; color: #A1A1AA; font-weight: bold; margin-top: 15px;'>MOVIMENTAÇÕES</p>", unsafe_allow_html=True)
     for i, row in df.iloc[::-1].head(10).iterrows():
         v = float(row['Valor'])
         cor_v = "#32D74B" if v > 0 else "#FF453A"
@@ -176,10 +170,10 @@ if check_password():
         st.markdown(f"""
             <div class="finance-card">
                 <div>
-                    <div style="font-weight: 600; font-size: 14px;">{row['Descrição']}</div>
-                    <small style="color: #8E8E93; font-size: 11px;">{row['Data']}</small>
+                    <div class="card-title">{row['Descrição']}</div>
+                    <div class="card-sub">{row['Data']}</div>
                 </div>
-                <div style="color: {cor_v}; font-weight: 700; font-size: 15px;">
+                <div style="color: {cor_v}; font-weight: bold; font-size: 14px;">
                     {formatar_moeda(v)}
                 </div>
             </div>
