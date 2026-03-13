@@ -1,60 +1,78 @@
-import gradio as gr
+import streamlit as st
 import pandas as pd
-from datetime import datetime
+from streamlit_gsheets import GSheetsConnection
 
-# --- LÓGICA DE SENHA ---
-PIN_CORRETO = "1234"
+# --- CONFIGURAÇÃO ---
+st.set_page_config(page_title="Finanças Casa", layout="centered")
 
-def gerenciar_teclado(digito, pin_atual):
-    if digito == "⌫":
-        return pin_atual[:-1]
-    novo_pin = pin_atual + digito
-    if len(novo_pin) <= 4:
-        return novo_pin
-    return pin_atual
-
-def validar_acesso(pin):
-    if pin == PIN_CORRETO:
-        return gr.update(visible=False), gr.update(visible=True)
-    else:
-        return gr.update(value=""), gr.update(visible=False)
-
-# --- INTERFACE ---
-with gr.Blocks(css=".container { max-width: 400px; margin: auto; } button { height: 70px !important; font-size: 20px !important; }") as app:
+# CSS QUE TRAVA O TECLADO (Melhores práticas de design mobile)
+st.markdown("""
+    <style>
+    /* Trava o container para não esticar */
+    .block-container { max-width: 320px !important; padding: 1rem !important; margin: auto; }
     
-    # TELA DE LOGIN
-    with gr.Column(visible=True) as login_screen:
-        gr.Markdown("# 🔐 Acesso Familiar")
-        pin_display = gr.Textbox(label="Senha", type="password", interactive=False, elem_id="pin_box")
-        
-        with gr.Row():
-            b1 = gr.Button("1"); b2 = gr.Button("2"); b3 = gr.Button("3")
-        with gr.Row():
-            b4 = gr.Button("4"); b5 = gr.Button("5"); b6 = gr.Button("6")
-        with gr.Row():
-            b7 = gr.Button("7"); b8 = gr.Button("8"); b9 = gr.Button("9")
-        with gr.Row():
-            b_del = gr.Button("⌫"); b0 = gr.Button("0"); b_ok = gr.Button("OK", variant="primary")
+    /* FORÇA 3 COLUNAS - O Streamlit não consegue quebrar isso */
+    [data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 8px !important;
+    }
+    [data-testid="column"] { flex: 1 !important; min-width: 0px !important; }
 
-    # TELA PRINCIPAL (DASHBOARD)
-    with gr.Column(visible=False) as main_screen:
-        gr.Markdown("# 🏠 Minha Casa Finanças")
-        with gr.Row():
-            gr.Number(label="Saldo Atual", value=1500.50, interactive=False)
-        
-        with gr.Row():
-            desc = gr.Textbox(label="O que comprou?")
-            valor = gr.Number(label="Valor")
-            btn_salvar = gr.Button("Salvar", variant="primary")
-        
-        gr.Markdown("### Últimos Gastos")
-        dados = gr.DataFrame(value=[["12/03", "Mercado", -150.00], ["11/03", "Lazer", -50.00]], headers=["Data", "Item", "R$"])
+    /* Estilo das teclas */
+    .stButton > button {
+        height: 55px !important;
+        background: #1A1A1A !important;
+        color: white !important;
+        border-radius: 12px !important;
+        font-size: 22px !important;
+        font-weight: bold !important;
+        border: 1px solid #333 !important;
+    }
+    button[kind="primary"] { background: #32D74B !important; color: black !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
-    # EVENTOS (O que acontece quando clica)
-    botoes = [b1, b2, b3, b4, b5, b6, b7, b8, b9, b0, b_del]
-    for b in botoes:
-        b.click(gerenciar_teclado, inputs=[b, pin_display], outputs=pin_display)
+# --- LÓGICA DO PIN ---
+if "pin" not in st.session_state: st.session_state.pin = ""
+if "autenticado" not in st.session_state: st.session_state.autenticado = False
+
+def add_num(v):
+    if len(st.session_state.pin) < 4: st.session_state.pin += str(v)
+
+if not st.session_state.autenticado:
+    st.markdown("<h2 style='text-align: center;'>🔐 PIN</h2>", unsafe_allow_html=True)
     
-    b_ok.click(validar_acesso, inputs=[pin_display], outputs=[login_screen, main_screen])
+    # Visualização da senha
+    senha_visivel = " ● " * len(st.session_state.pin) + " ○ " * (4 - len(st.session_state.pin))
+    st.markdown(f"<h1 style='text-align: center; color: #32D74B;'>{senha_visivel}</h1>", unsafe_allow_html=True)
 
-app.launch(share=True)
+    # TECLADO INQUEBRÁVEL
+    for row in [[1, 2, 3], [4, 5, 6], [7, 8, 9]]:
+        c1, c2, c3 = st.columns(3)
+        if c1.button(str(row[0])): add_num(row[0]); st.rerun()
+        if c2.button(str(row[1])): add_num(row[1]); st.rerun()
+        if c3.button(str(row[2])): add_num(row[2]); st.rerun()
+    
+    c_del, c_zero, c_ok = st.columns(3)
+    if c_del.button("⌫"): st.session_state.pin = st.session_state.pin[:-1]; st.rerun()
+    if c_zero.button("0"): add_num(0); st.rerun()
+    if c_ok.button("OK", type="primary"):
+        if st.session_state.pin == "1234":
+            st.session_state.autenticado = True
+            st.rerun()
+        else:
+            st.error("Senha Errada")
+            st.session_state.pin = ""
+
+else:
+    # --- ÁREA DO DASHBOARD ---
+    st.success("Bem-vindo de volta!")
+    if st.button("Sair"): 
+        st.session_state.autenticado = False
+        st.session_state.pin = ""
+        st.rerun()
+    
+    # Aqui entra o seu código do Google Sheets que já estava funcionando
+    st.info("Conectando ao Google Sheets...")
